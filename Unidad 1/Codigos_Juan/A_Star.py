@@ -32,6 +32,25 @@ class A_Star:
         #Si bien el costo será 1, pero la hacemos para que el programa sea general, en otro caso g podría no serlo
         f = g + h
         return f
+    
+    def objetivo_accesible(self, pos_objetivo):
+        fila, col = pos_objetivo
+        filas, cols = self.grafo.shape
+
+        # Si ya es accesible, lo devuelve igual
+        if self.grafo[fila, col] == 0:
+            return pos_objetivo
+
+        # Si es obstáculo, probar izquierda primero
+        if 0 <= col - 1 < cols and self.grafo[fila, col - 1] == 0:
+            return (fila, col - 1)
+
+        # Si no, probar derecha
+        if 0 <= col + 1 < cols and self.grafo[fila, col + 1] == 0:
+            return (fila, col + 1)
+
+        # Si no hay acceso horizontal
+        return None
 
     def buscar_vecinos(self,nodo):
         x,y = nodo.posicion
@@ -61,7 +80,14 @@ class A_Star:
     
     def busqueda(self, pos_inicio, pos_final):
         inicio = Nodo(pos_inicio)
-        meta = Nodo(pos_final)
+
+        pos_meta_real = pos_final
+        pos_meta_accesible = self.objetivo_accesible(pos_meta_real)
+
+        if pos_meta_accesible is None:
+            return None
+
+        meta = Nodo(pos_meta_accesible)
 
         lista_abierta = []
         lista_cerrada = set()    
@@ -178,15 +204,12 @@ def main():
     astar = A_Star(grafo)
 
     inicio = (0, 0)   # (fila, col)
-    final  = (9, 9)
+    final  = (9, 11)
 
     if grafo[inicio] == 1:
         print("Error: START está en un obstáculo.")
         return
 
-    if grafo[final] == 1:
-        print("Error: FINISH está en un obstáculo.")
-        return
 
     camino = astar.busqueda(inicio, final)
 
@@ -194,7 +217,9 @@ def main():
         print("No existe camino posible entre START y FINISH.")
     else:
         print(camino)
-        plot_path(grafo, camino, inicio=inicio, final=final)
+        print("Objetivo real:", final)
+        print("Objetivo accesible:", camino[-1])
+        plot_path(grafo, camino, inicio=inicio, final=camino[-1])
 
 
 if __name__ == "__main__":
