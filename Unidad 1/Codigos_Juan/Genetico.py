@@ -40,12 +40,17 @@ def generar_poblacion(tamano_poblacion):
         poblacion.append(individuo)
     return poblacion
 
-def fitness(poblacion,astar):
+ENTRADA = (5, 0)  # Fila, columna de la estación de carga
+
+def fitness(poblacion, frecuencias, dist_slots):
+    """Costo = suma(freq[producto] * distancia_slot_a_entrada).
+    Recibe frecuencias y dist_slots pre-calculados para evitar repetirlos."""
     costos = []
     for individuo in poblacion:
         costo = 0
-        for i in range(len(individuo) - 1):
-            costo += Temple.obtener_distancia(individuo[i], individuo[i + 1], astar)
+        for slot_idx, producto in enumerate(individuo):
+            slot_id = slot_idx + 1
+            costo += frecuencias.get(producto, 0) * dist_slots[slot_id]
         costos.append(costo)
     return costos
 
@@ -187,19 +192,31 @@ def main():
                     grafo[r, c] = 1
 
     astar = A.A_Star(grafo)
+
+    # --- Pre-calcular una sola vez (48 búsquedas A* en total) ---
+    frecuencias = {}
+    for orden in ordenes:
+        for prod in orden:
+            frecuencias[prod] = frecuencias.get(prod, 0) + 1
+
+    dist_slots = {}
+    for slot_id, (fila, col) in MAPA_ESTANTERIAS.items():
+        camino = astar.busqueda(ENTRADA, (fila, col))
+        dist_slots[slot_id] = len(camino) - 1 if camino else 999
+
     poblacion = generar_poblacion(100)
 
     historial_costos = []
-    costo_inicial = min(fitness(poblacion, astar))
+    costo_inicial = min(fitness(poblacion, frecuencias, dist_slots))
     for i in range(5000):
-        costos = fitness(poblacion, astar)
+        costos = fitness(poblacion, frecuencias, dist_slots)
         historial_costos.append(min(costos))
         seleccionados, costos_sel = seleccion(poblacion, costos, 20)
         poblacion_nueva = crossover(seleccionados, costos_sel, 100)
         poblacion_nueva = mutacion(poblacion_nueva, 0.1)
         poblacion = poblacion_nueva
     
-    costos = fitness(poblacion, astar)
+    costos = fitness(poblacion, frecuencias, dist_slots)
     mejor_idx = np.argmin(costos)
     mejor_solucion = poblacion[mejor_idx]
     print("Mejor solución encontrada:", mejor_solucion)
