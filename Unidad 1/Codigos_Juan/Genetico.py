@@ -7,7 +7,7 @@ import Temple
 
 ordenes = []
 
-with open(r"D:\01. Facultad\ia2\IA2\IA2\Unidad 1\Codigos_Juan\ordenes.csv", "r") as archivo:
+with open("ordenes.csv", "r") as archivo:
     lector = csv.reader(archivo)
     for fila in lector:
         ordenes.append([int(x) for x in fila])
@@ -208,7 +208,7 @@ def main():
 
     historial_costos = []
     costo_inicial = min(fitness(poblacion, frecuencias, dist_slots))
-    for i in range(5000):
+    for i in range(4000):
         costos = fitness(poblacion, frecuencias, dist_slots)
         historial_costos.append(min(costos))
         seleccionados, costos_sel = seleccion(poblacion, costos, 20)
@@ -219,7 +219,6 @@ def main():
     costos = fitness(poblacion, frecuencias, dist_slots)
     mejor_idx = np.argmin(costos)
     mejor_solucion = poblacion[mejor_idx]
-    print("Mejor solución encontrada:", mejor_solucion)
     print("Costo total:", costos[mejor_idx])
 
     # --- Gráfico de convergencia ---

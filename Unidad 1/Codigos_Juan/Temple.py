@@ -6,7 +6,7 @@ import random
 
 ordenes = []
 
-with open(r"D:\01. Facultad\ia2\IA2\IA2\Unidad 1\Codigos_Juan\ordenes.csv", "r") as archivo:
+with open("ordenes.csv", "r") as archivo:
     lector = csv.reader(archivo)
     for fila in lector:
         ordenes.append([int(x) for x in fila])
