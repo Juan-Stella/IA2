@@ -52,17 +52,42 @@ class AlmacenOptimizadoGA:
 
     def _cargar_frecuencias(self, ruta):
         try:
-            df = pd.read_csv(ruta)
-            # Aplanar el DataFrame y contar frecuencias
+            # Leer el archivo línea por línea para manejar formato inconsistente
             freq = {}
-            for col in df.columns:
-                for val in df[col].dropna():
-                    if val in freq:
-                        freq[val] += 1
-                    else:
-                        freq[val] = 1
+            
+            with open(ruta, 'r') as file:
+                lines = file.readlines()
+            
+            # La primera línea es el encabezado
+            headers = lines[0].strip().split(',')
+            
+            # Procesar cada línea de datos
+            for line in lines[1:]:
+                # Dividir por coma y limpiar
+                values = line.strip().split(',')
+                
+                # Filtrar valores vacíos o NaN
+                for val in values:
+                    val = val.strip()
+                    if val and val != 'nan' and val != '':
+                        try:
+                            # Convertir a entero (asumiendo que los productos son números)
+                            prod_id = int(float(val)) if '.' in val else int(val)
+                            
+                            # Incrementar frecuencia
+                            if prod_id in freq:
+                                freq[prod_id] += 1
+                            else:
+                                freq[prod_id] = 1
+                        except ValueError:
+                            # Ignorar valores que no sean números
+                            continue
+            
+            print(f"✅ CSV cargado correctamente. {len(freq)} productos encontrados.")
+            
         except Exception as e:
-            print(f"Error cargando CSV: {e}. Usando datos aleatorios...")
+            print(f"⚠️ Error cargando CSV: {e}. Usando datos aleatorios...")
+        # ... resto del código para datos aleatorios
             # Datos aleatorios si no hay CSV - distribución más realista
             freq = {}
             # Productos populares (top 10)
@@ -367,7 +392,7 @@ class AlmacenOptimizadoGA:
 if __name__ == "__main__":
     # Intentar cargar el archivo CSV
     try:
-        ga = AlmacenOptimizadoGA(ruta_csv="ordenes.csv")
+        ga = AlmacenOptimizadoGA(ruta_csv=r"C:\Users\lamun\OneDrive\Escritorio\Inteligencia Artificial 2\Int Art 2\IA2\Unidad 1\Alg Genetico\ordenes.csv")
     except:
         print("Usando datos aleatorios...")
         ga = AlmacenOptimizadoGA(ruta_csv=None)
