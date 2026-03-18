@@ -150,5 +150,5 @@ class AlmacenOptimizadoGA:
 
 # Ejecución
 # Asegúrate de que 'ordenes.csv' esté en la misma carpeta o usa la ruta de AlgGen.py
-ga = AlmacenOptimizadoGA(ruta_csv=r"C:\Users\lamun\OneDrive\Escritorio\Inteligencia Artificial 2\Int Art 2\IA2\Unidad 1\Alg Genetico\ordenes.csv")
+ga = AlmacenOptimizadoGA(ruta_csv="ordenes.csv")
 ga.ejecutar(generaciones=150, pop_size=50)
