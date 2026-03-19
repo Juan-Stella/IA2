@@ -10,7 +10,8 @@ ordenes = []
 with open("ordenes.csv", "r") as archivo:
     lector = csv.reader(archivo)
     for fila in lector:
-        ordenes.append([int(x) for x in fila])
+        if fila:  # ignorar filas vacías al final del CSV
+            ordenes.append([int(x) for x in fila])
 
 MAPA_ESTANTERIAS = {
     1: (1, 2),  2: (1, 3),   3: (2, 2),  4: (2, 3),
@@ -112,7 +113,39 @@ def mutacion(poblacion_nueva, prob_mutacion):
                 poblacion_nueva[i][posiciones[j]] = valores[j]
     return poblacion_nueva
 
-def visualizar_almacen(mejor_solucion, ordenes):
+def precalcular_distancias(astar):
+    dist = np.zeros((49, 49), dtype=int)
+    for i in range(49):
+        coord_i = ENTRADA if i == 0 else MAPA_ESTANTERIAS[i]
+        for j in range(i+1, 49):
+            coord_j = ENTRADA if j == 0 else MAPA_ESTANTERIAS[j]
+            camino = astar.busqueda(coord_i, coord_j)
+            d = len(camino) - 1 if camino else 999
+            dist[i, j] = d
+            dist[j, i] = d
+    return dist
+
+def ruteo_orden_nn(orden, dist_matrix, layout):
+    prod_a_slot = {p: slot+1 for slot, p in enumerate(layout)}
+    actual = 0
+    costo_total = 0
+    por_visitar = set(prod_a_slot[p] for p in orden)
+    while por_visitar:
+        siguiente = min(por_visitar, key=lambda s: dist_matrix[actual, s])
+        costo_total += dist_matrix[actual, siguiente]
+        actual = siguiente
+        por_visitar.remove(siguiente)
+    costo_total += dist_matrix[actual, 0]
+    return costo_total
+
+def costo_layout_real(layout, ordenes, dist_matrix):
+    costo = 0
+    for orden in ordenes:
+        costo += ruteo_orden_nn(orden, dist_matrix, layout)
+    return costo
+
+
+def visualizar_almacen(mejor_solucion, ordenes, titulo_extra=""):
     # --- Frecuencia de cada producto en las órdenes ---
     frecuencias = {}
     for orden in ordenes:
@@ -175,7 +208,7 @@ def visualizar_almacen(mejor_solucion, ordenes):
     ax.tick_params(colors='#aaaaaa', labelsize=8)
     ax.set_xlabel('Columna', color='#aaaaaa', fontsize=10)
     ax.set_ylabel('Fila', color='#aaaaaa', fontsize=10)
-    ax.set_title('Almacén — Configuración óptima (Algoritmo Genético)\nMapa de calor: frecuencia de pedidos por producto',
+    ax.set_title(f'Almacén — Configuración óptima {titulo_extra}\\nMapa de calor: frecuencia de pedidos por producto',
                  color='white', fontsize=13, pad=14)
     ax.spines[:].set_color('#444466')
 
@@ -208,7 +241,7 @@ def main():
 
     historial_costos = []
     costo_inicial = min(fitness(poblacion, frecuencias, dist_slots))
-    for i in range(4000):
+    for i in range(1000):
         costos = fitness(poblacion, frecuencias, dist_slots)
         historial_costos.append(min(costos))
         seleccionados, costos_sel = seleccion(poblacion, costos, 20)
@@ -218,26 +251,76 @@ def main():
     
     costos = fitness(poblacion, frecuencias, dist_slots)
     mejor_idx = np.argmin(costos)
-    mejor_solucion = poblacion[mejor_idx]
-    print("Costo total:", costos[mejor_idx])
+    mejor_solucion_ga = poblacion[mejor_idx]
+    print("Costo heurístico GA (Trivial):", costos[mejor_idx])
 
-    # --- Gráfico de convergencia ---
-    fig, ax = plt.subplots(figsize=(10, 5))
+    print("\nCalculando matriz de distancias reales (A* para todos los pares)...")
+    dist_matrix = precalcular_distancias(astar)
+
+    costo_real_ga = costo_layout_real(mejor_solucion_ga, ordenes, dist_matrix)
+    print(f"-> Costo RUTEO REAL del layout Trivial (Genético): {costo_real_ga} pasos totales")
+
+    print("\nOptimizando layout con Temple Simulado (Considerando agrupación de órdenes)...")
+    layout_inicial = list(range(1, 49))
+    random.shuffle(layout_inicial)
+    fn_costo = lambda layout: costo_layout_real(layout, ordenes, dist_matrix)
+    mejor_solucion_temple, costo_real_temple, hist_temple = Temple.temple_generico(
+        layout_inicial, fn_costo, iteraciones=10000, T=500.0)
+
+    print(f"-> Costo RUTEO REAL del layout por agrupación (Temple): {costo_real_temple} pasos totales")
+    
+    ahorro = costo_real_ga - costo_real_temple
+    porcentaje = (ahorro / costo_real_ga) * 100 if costo_real_ga > 0 else 0
+    print(f"\nAhorro total: {ahorro} pasos equivalentes al {porcentaje:.2f}% de mejora.\n")
+
+    # --- Gráficos de convergencia comparados (normalizados) ---
+    base_ga        = historial_costos[0] if historial_costos else 1
+    base_temple    = hist_temple[0]      if hist_temple      else 1
+    hist_ga_n      = [v / base_ga        for v in historial_costos]
+    hist_temple_n  = [v / base_temple    for v in hist_temple]
+    ga_final_n     = costo_real_ga    / base_ga
+    temple_final_n = costo_real_temple / base_temple
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 5))
     fig.patch.set_facecolor('#1a1a2e')
-    ax.set_facecolor('#1a1a2e')
-    ax.plot(historial_costos, color='#00d4ff', linewidth=2, label='Costo mínimo por generación')
-    ax.fill_between(range(len(historial_costos)), historial_costos, alpha=0.15, color='#00d4ff')
-    ax.axhline(costo_inicial, color='#ff7043', linewidth=1.5, linestyle='--', label=f'Costo inicial: {costo_inicial:.1f}')
-    ax.legend(facecolor='#2a2a4e', labelcolor='white', fontsize=10)
-    ax.set_xlabel('Iteración', color='#aaaaaa', fontsize=11)
-    ax.set_ylabel('Costo mínimo', color='#aaaaaa', fontsize=11)
-    ax.set_title('Convergencia del Algoritmo Genético', color='white', fontsize=13, pad=12)
-    ax.tick_params(colors='#aaaaaa')
-    ax.spines[:].set_color('#444466')
-    plt.tight_layout()
-    plt.show()
 
-    visualizar_almacen(mejor_solucion, ordenes)
+    # -- GA --
+    ax1.set_facecolor('#1a1a2e')
+    ax1.plot(hist_ga_n, color='#00d4ff', linewidth=2, label='Costo normalizado')
+    ax1.fill_between(range(len(hist_ga_n)), hist_ga_n, alpha=0.15, color='#00d4ff')
+    ax1.axhline(1.0, color='#ff7043', linewidth=1.5, linestyle='--', label='Costo inicial (1.0)')
+    ax1.axhline(ga_final_n, color='#aaffaa', linewidth=1.2, linestyle=':', label=f'Ruteo real: {ga_final_n:.3f}')
+    ax1.legend(facecolor='#2a2a4e', labelcolor='white', fontsize=9)
+    ax1.set_xlabel('Generación', color='#aaaaaa', fontsize=11)
+    ax1.set_ylabel('Costo normalizado', color='#aaaaaa', fontsize=11)
+    ax1.set_title('Convergencia — Algoritmo Genético\n(Heurística: frec × distancia)', color='white', fontsize=12, pad=10)
+    ax1.tick_params(colors='#aaaaaa')
+    ax1.spines[:].set_color('#444466')
+    ax1.set_ylim(min(hist_ga_n) * 0.97, 1.03)
+
+    # -- Temple --
+    ax2.set_facecolor('#1a1a2e')
+    ax2.plot(hist_temple_n, color='#ff9f43', linewidth=2, label='Mejor costo normalizado')
+    ax2.fill_between(range(len(hist_temple_n)), hist_temple_n, alpha=0.15, color='#ff9f43')
+    ax2.axhline(1.0, color='#ff7043', linewidth=1.5, linestyle='--', label='Costo inicial (1.0)')
+    ax2.axhline(temple_final_n, color='#aaffaa', linewidth=1.2, linestyle=':', label=f'Costo final: {temple_final_n:.3f}')
+    ax2.legend(facecolor='#2a2a4e', labelcolor='white', fontsize=9)
+    ax2.set_xlabel('Iteración', color='#aaaaaa', fontsize=11)
+    ax2.set_ylabel('Costo normalizado', color='#aaaaaa', fontsize=11)
+    ax2.set_title('Convergencia — Temple Simulado\n(Optimización por agrupación de órdenes)', color='white', fontsize=12, pad=10)
+    ax2.tick_params(colors='#aaaaaa')
+    ax2.spines[:].set_color('#444466')
+    ax2.set_ylim(min(hist_temple_n) * 0.97, 1.03)
+
+    fig.suptitle('Comparación de convergencia: Genético vs Temple', color='white', fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
+
+    print("Mostrando Almacén: Trivial (Genético)")
+    visualizar_almacen(mejor_solucion_ga, ordenes, "(Genético: Solo por Frecuencia)")
+    print("Mostrando Almacén: Agrupado por Órdenes (Temple)")
+    visualizar_almacen(mejor_solucion_temple, ordenes, "(Temple: Agrupado por Orden)")
+
+    plt.show() # Bloquea al final para mantener ventanas abiertas
 
 if __name__ == "__main__":
     main()

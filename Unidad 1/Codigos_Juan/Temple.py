@@ -100,6 +100,46 @@ def temple_simulado(solucion_inicial, iteraciones, T):
 
     return solucion_actual, costo_actual, historial_costos, historial_temperatura
 
+
+def temple_generico(solucion_inicial, fn_costo, iteraciones=5000, T=100.0):
+    """Temple simulado genérico. Acepta cualquier función de costo fn_costo(solucion) -> float.
+    Retorna (mejor_solucion, mejor_costo, historial_costos)."""
+    mejor_solucion = solucion_inicial[:]
+    mejor_costo = fn_costo(mejor_solucion)
+    solucion_actual = mejor_solucion[:]
+    costo_actual = mejor_costo
+    historial = []
+
+    for _ in range(iteraciones):
+        T *= 0.99
+        if T < 0.001:
+            break
+
+        vecino = solucion_actual[:]
+        a, b = random.sample(range(len(vecino)), 2)
+        vecino[a], vecino[b] = vecino[b], vecino[a]
+
+        costo_vecino = fn_costo(vecino)
+
+        if costo_vecino < costo_actual:
+            solucion_actual = vecino
+            costo_actual = costo_vecino
+            if costo_actual < mejor_costo:
+                mejor_costo = costo_actual
+                mejor_solucion = solucion_actual[:]
+        else:
+            try:
+                p = np.exp((costo_actual - costo_vecino) / T)
+            except OverflowError:
+                p = 0
+            if random.random() < p:
+                solucion_actual = vecino
+                costo_actual = costo_vecino
+
+        historial.append(mejor_costo)
+
+    return mejor_solucion, mejor_costo, historial
+
 def graficar_curvas(historial_costos, historial_temperatura):
     plt.figure(figsize=(10, 5))
     plt.plot(historial_costos, label="Costo")
