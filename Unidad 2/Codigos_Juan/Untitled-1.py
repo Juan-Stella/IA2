@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -10,18 +10,13 @@ from scipy import constants
 # =============================================================================
 # CONSTANTES DEL SISTEMA
 # =============================================================================
-M = 20.0
-m = 3.0
+M = 3.0
+m = 1.0
 l = 1.0
 g = constants.g
 CART_HALF_WIDTH = 0.4
 CART_HEIGHT = 0.32
 ARROW_SCALE = 1.0
-CONTROL_FORCE_GAIN = 1.0
-CART_VISCOSITY = 30.0
-STARTUP_KICK_FORCE = 120.0
-STARTUP_KICK_TIME = 0.15
-ANIM_MAX_HALF_WIDTH = 6.0
 COLOR_F_CTRL = '#52a8e0'
 COLOR_F_PUSH = '#f59e0b'
 COLOR_F_TOTAL = '#f43f5e'
@@ -32,7 +27,7 @@ COLOR_F_TOTAL = '#f43f5e'
 CONJUNTOS = ['NGG', 'NG', 'NP', 'Z', 'PP', 'PG', 'PGG']
 
 COLORES = ['#e05252', '#e08c52', '#d4c84a', '#52c47a', '#52a8e0', '#7a6ee0', '#c052e0']
-F_UNIVERSE = np.linspace(-300, 300, 60001)
+F_UNIVERSE = np.linspace(-100, 100, 20001)
 
 # Particiones definidas a mano para los graficos.
 THETA_PLOT_SPECS = [
@@ -56,22 +51,19 @@ DTHETA_PLOT_SPECS = [
 ]
 
 F_PLOT_SPECS = [
-    ('left', -300.0000, -240.0000),
-    ('tri', -260.0000, -200.0000, -140.0000),
-    ('tri', -160.0000, -100.0000,  -40.0000),
-    ('tri',  -60.0000,    0.0000,   60.0000),
-    ('tri',   40.0000,  100.0000,  160.0000),
-    ('tri',  140.0000,  200.0000,  260.0000),
-    ('right', 240.0000, 300.0000),
+    ('left',  -100.0,  -80.0),
+    ('tri',    -87.0,  -67.0,  -47.0),
+    ('tri',    -53.0,  -33.0,  -13.0),
+    ('tri',    -20.0,    0.0,   20.0),
+    ('tri',     13.0,   33.0,   53.0),
+    ('tri',     47.0,   67.0,   87.0),
+    ('right',   80.0,  100.0),
 ]
 
-# Particiones manuales equivalentes a la logica del controlador que te
-# funcionaba antes. Esto mantiene el comportamiento del control, pero sin
-# volver a usar PICOS_/D_ en el codigo.
 THETA_CTRL_SPECS = [
     ('left', -130.0000, -110.0000),
     ('tri', -160.0000, -110.0000, -60.0000),
-    ('tri', -100.0000, -50.0000, 0.0000), 
+    ('tri', -100.0000, -50.0000, 0.0000),
     ('tri', -50.0000, 0.0000, 50.0000),
     ('tri', 0.0000, 50.0000, 100.0000),
     ('tri', 60.0000, 110.0000, 160.0000),
@@ -89,13 +81,13 @@ DTHETA_CTRL_SPECS = [
 ]
 
 F_CTRL_SPECS = [
-    ('left', -300.0000, -240.0000),
-    ('tri', -260.0000, -200.0000, -140.0000),
-    ('tri', -160.0000, -100.0000,  -40.0000),
-    ('tri',  -60.0000,    0.0000,   60.0000),
-    ('tri',   40.0000,  100.0000,  160.0000),
-    ('tri',  140.0000,  200.0000,  260.0000),
-    ('right', 240.0000, 300.0000),
+    ('left',   -87.0,  -80.0),
+    ('tri',    -87.0,  -67.0,  -47.0),
+    ('tri',    -53.0,  -33.0,  -13.0),
+    ('tri',    -20.0,    0.0,   20.0),
+    ('tri',     13.0,   33.0,   53.0),
+    ('tri',     47.0,   67.0,   87.0),
+    ('right',   80.0,   87.0),
 ]
 
 
@@ -161,53 +153,6 @@ def _spec_points(spec):
     return peak, zeros
 
 
-def _spec_support_interval(spec):
-    kind = spec[0]
-    if kind == 'left':
-        return spec[1], spec[2]
-    if kind == 'right':
-        return spec[1], spec[2]
-    return spec[1], spec[3]
-
-
-def _adjacent_overlap_percentages(specs):
-    porcentajes = []
-    for spec_a, spec_b in zip(specs[:-1], specs[1:]):
-        left_a, right_a = _spec_support_interval(spec_a)
-        left_b, right_b = _spec_support_interval(spec_b)
-        overlap = max(0.0, min(right_a, right_b) - max(left_a, left_b))
-        ancho_a = right_a - left_a
-        ancho_b = right_b - left_b
-        ref = min(ancho_a, ancho_b)
-        porcentajes.append(0.0 if ref <= 0.0 else 100.0 * overlap / ref)
-    return porcentajes
-
-
-def _internal_adjacent_overlap_percentages(specs):
-    porcentajes = _adjacent_overlap_percentages(specs)
-    if len(porcentajes) <= 2:
-        return porcentajes
-    return porcentajes[1:-1]
-
-
-def crear_arranque(theta_0_deg, v_0_deg):
-    theta_norm = _normaliza_angulo_deg(theta_0_deg)
-    if np.isclose(abs(theta_norm), 180.0, atol=1e-9) and np.isclose(v_0_deg, 0.0, atol=1e-9):
-        signo = float(np.random.choice([-1.0, 1.0]))
-        return signo * STARTUP_KICK_FORCE, STARTUP_KICK_TIME
-    return 0.0, 0.0
-
-
-def actualizar_camara_animacion(ax_anim, track_limit, side_margin):
-    full_half_width = track_limit + side_margin
-    view_half_width = min(full_half_width, ANIM_MAX_HALF_WIDTH)
-    ax_anim.set_xlim(-view_half_width, view_half_width)
-
-    tick_step = 1.0 if view_half_width <= 6 else 2.0
-    xticks = np.arange(np.floor(-view_half_width), np.ceil(view_half_width) + 0.001, tick_step)
-    ax_anim.set_xticks(xticks)
-
-
 MU_F_BASE = _mu_plot_particion(F_UNIVERSE, F_CTRL_SPECS)
 
 # =============================================================================
@@ -226,12 +171,11 @@ FAM = np.array([
 ])
 
 
-
 # =============================================================================
 # CONTROLADOR DIFUSO
 # =============================================================================
 def controlador_fam(theta_deg, dtheta_deg):
-    dtheta_deg = np.clip(dtheta_deg, -90, 90)
+    dtheta_deg = np.clip(dtheta_deg, -55, 55)  # las particiones saturan en ±55
     mu_t = _mu_plot_scalar(theta_deg, THETA_CTRL_SPECS)
     mu_dt = _mu_plot_scalar(dtheta_deg, DTHETA_CTRL_SPECS)
     alpha = np.minimum(mu_dt[:, None], mu_t[None, :])
@@ -245,48 +189,55 @@ def controlador_fam(theta_deg, dtheta_deg):
     total = np.trapezoid(mu_salida, F_UNIVERSE)
     if total < 1e-7:
         return 0.0
-    # Se devuelve F con la convención del usuario:
-    # positivo hacia la izquierda, negativo hacia la derecha.
-    f = CONTROL_FORCE_GAIN * float(np.trapezoid(F_UNIVERSE * mu_salida, F_UNIVERSE) / total)
+    f = float(np.trapezoid(F_UNIVERSE * mu_salida, F_UNIVERSE) / total)
     return f
 
 # =============================================================================
-# FÍSICA
+# FÍSICA — modelo acoplado carro + péndulo
 # =============================================================================
-def calcula_aceleracion(theta_rad, v_rad, f_N):
-    num = (g * np.sin(theta_rad)
-           + np.cos(theta_rad) * ((-f_N - m*l*v_rad**2*np.sin(theta_rad)) / (M+m)))
-    den = l * (4/3 - m*np.cos(theta_rad)**2 / (M+m))
-    return num / den
+def calcula_aceleraciones(theta_rad, v_rad, f_N):
+    """
+    Devuelve (ddtheta, ddx): aceleración angular del péndulo y aceleración
+    lineal del carro, resueltas simultáneamente desde las ecuaciones de Lagrange.
 
+    Convención: f_N > 0 mueve el carro a la derecha (convención del modelo).
+    """
+    sin_t = np.sin(theta_rad)
+    cos_t = np.cos(theta_rad)
 
-def calcula_aceleracion_carro(theta_rad, v_rad, theta_dd, cart_v, f_N):
-    friccion_viscosa = CART_VISCOSITY * cart_v
-    fuerza_neta = f_N - friccion_viscosa
-    return (fuerza_neta + m * l * (v_rad**2 * np.sin(theta_rad) - theta_dd * np.cos(theta_rad))) / (M + m)
+    # Aceleración angular del péndulo (igual que antes)
+    ddtheta = (
+        g * sin_t + cos_t * ((-f_N - m * l * v_rad**2 * sin_t) / (M + m))
+    ) / (l * (4/3 - m * cos_t**2 / (M + m)))
+
+    # Aceleración lineal del carro derivada de la ecuación de Newton sobre x:
+    #   (M+m)·ẍ = F + m·l·(θ̈·cos θ - θ̇²·sin θ)
+    ddx = (f_N + m * l * (ddtheta * cos_t - v_rad**2 * sin_t)) / (M + m)
+
+    return ddtheta, ddx
 
 
 def crear_estado(theta_0_deg, v_0_deg):
     return {
-        'theta': np.radians(theta_0_deg),
-        'v': np.radians(v_0_deg),
-        't': 0.0,
-        'cart_x': 0.0,
-        'cart_v': 0.0,
-        'empuje': 0.0,
-        'f_ctrl': 0.0,
+        'theta':   np.radians(theta_0_deg),
+        'v':       np.radians(v_0_deg),
+        'cart_x':  0.0,
+        'cart_vx': 0.0,          # velocidad del carro — nuevo
+        't':       0.0,
+        'empuje':  0.0,
+        'f_ctrl':  0.0,
         'f_total': 0.0,
     }
 
 
 def reiniciar_historiales(theta_0_deg):
     return {
-        't': [0.0],
-        'theta': [theta_0_deg],
-        'f_ctrl': [0.0],
-        'f_push': [0.0],
+        't':       [0.0],
+        'theta':   [theta_0_deg],
+        'f_ctrl':  [0.0],
+        'f_push':  [0.0],
         'f_total': [0.0],
-        'x': [0.0],
+        'x':       [0.0],
     }
 
 
@@ -298,33 +249,36 @@ def limitar_fuerza_control(cart_x, track_limit, edge_eps, f_ctrl):
     return f_ctrl
 
 
-def integrar_pendulo(estado, f_total, delta_t):
-    f_modelo = fuerza_usuario_a_modelo(f_total)
-    theta_dd = calcula_aceleracion(estado['theta'], estado['v'], f_modelo)
-    x_dd = calcula_aceleracion_carro(estado['theta'], estado['v'], theta_dd, estado['cart_v'], f_modelo)
+def integrar_sistema(estado, f_total, delta_t):
+    """
+    Integra péndulo Y carro con Verlet de orden 2.
+    f_total está en convención usuario (+ = izquierda); se convierte antes de usarse.
+    """
+    f_modelo = fuerza_usuario_a_modelo(f_total)  # convención del modelo (+= derecha)
 
+    ddtheta, ddx = calcula_aceleraciones(estado['theta'], estado['v'], f_modelo)
+
+    # Verlet para el ángulo
     v_prev = estado['v']
-    cart_v_prev = estado['cart_v']
+    estado['theta'] += v_prev * delta_t + 0.5 * ddtheta * delta_t**2
+    estado['v']      = v_prev + ddtheta * delta_t
 
-    estado['theta'] += v_prev * delta_t + 0.5 * theta_dd * delta_t**2
-    estado['v'] = v_prev + theta_dd * delta_t
-    estado['cart_x'] += cart_v_prev * delta_t + 0.5 * x_dd * delta_t**2
-    estado['cart_v'] = cart_v_prev + x_dd * delta_t
+    # Verlet para la posición del carro
+    vx_prev = estado['cart_vx']
+    estado['cart_x']  += vx_prev * delta_t + 0.5 * ddx * delta_t**2
+    estado['cart_vx']  = vx_prev + ddx * delta_t
+
     estado['t'] += delta_t
 
 
-def actualizar_posicion_carro(estado, track_limit, edge_eps):
-    en_tope_izq = estado['cart_x'] <= -track_limit + edge_eps
-    en_tope_der = estado['cart_x'] >= track_limit - edge_eps
-
-    if en_tope_izq:
-        estado['cart_x'] = -track_limit
-        if estado['cart_v'] < 0.0:
-            estado['cart_v'] = 0.0
-    elif en_tope_der:
-        estado['cart_x'] = track_limit
-        if estado['cart_v'] > 0.0:
-            estado['cart_v'] = 0.0
+def aplicar_topes_carro(estado, track_limit):
+    """Rebote inelástico perfecto en los topes: detiene el carro pero no el péndulo."""
+    if estado['cart_x'] <= -track_limit:
+        estado['cart_x']  = -track_limit
+        estado['cart_vx'] = 0.0
+    elif estado['cart_x'] >= track_limit:
+        estado['cart_x']  = track_limit
+        estado['cart_vx'] = 0.0
 
 
 def registrar_historial(hist, estado):
@@ -347,21 +301,19 @@ def graficar_particiones():
     configs = [
         (axes[0], THETA_PLOT_SPECS, 'θ  [°]', -180, 180),
         (axes[1], DTHETA_PLOT_SPECS, "θ'  [°/s]", -90, 90),
-        (axes[2], F_PLOT_SPECS, 'F  [N]', -300, 300),
+        (axes[2], F_PLOT_SPECS, 'F  [N]', -100, 100),
     ]
 
     for ax, specs, xlabel, xmin, xmax in configs:
         ax.set_facecolor('#1a1d2e')
         ax.tick_params(colors='#8890a8', labelsize=8)
-        ax.tick_params(axis='x', colors='#ffffff', labelsize=8)
         for sp in ax.spines.values():
             sp.set_edgecolor('#2a2d3a')
-        ax.spines['bottom'].set_edgecolor('#ffffff')
-        ax.spines['bottom'].set_linewidth(1.1)
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(-0.16, 1.15)
         ax.set_xlabel(xlabel, color='#8890a8', fontsize=10)
         ax.set_ylabel('μ', color='#8890a8', fontsize=10)
+        ax.axhline(0, color='#2a2d3a', lw=0.8)
         ax.axhline(1, color='#2a2d3a', lw=0.5, ls=':')
         ax.axvline(0, color='#2a2d3a', lw=0.5, ls='--')
         ax.grid(True, alpha=0.08)
@@ -383,17 +335,7 @@ def graficar_particiones():
                 ax.text(x0, -0.085 - 0.03 * (k % 2), f'{x0:g}',
                         color=COLORES[i], fontsize=6.5, ha='center', va='top')
 
-        ax.axhline(0, color='#ffffff', lw=1.3, alpha=0.9, zorder=10)
         ax.axhline(0.5, color='#ffffff', lw=0.4, ls=':', alpha=0.3)
-        solapes = _internal_adjacent_overlap_percentages(specs)
-        if np.ptp(solapes) < 1e-6:
-            texto_solape = f'Solape interno: {solapes[0]:.1f}%'
-        else:
-            texto_solape = 'Solape interno: ' + ' | '.join(f'{p:.1f}%' for p in solapes)
-        ax.text(0.98, 0.97, texto_solape, transform=ax.transAxes,
-                ha='right', va='top', color='#ffffff', fontsize=7.2,
-                bbox=dict(boxstyle='round,pad=0.22', facecolor='#0f1117',
-                          edgecolor='#ffffff', alpha=0.25))
 
     plt.tight_layout(rect=[0.0, 0.04, 1.0, 0.92])
     plt.show()
@@ -403,12 +345,9 @@ def graficar_particiones():
 # =============================================================================
 def simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5):
 
-    max_force_user = max(abs(F_UNIVERSE[0]), abs(F_UNIVERSE[-1])) + 150.0
-    max_cart_acc = abs(fuerza_usuario_a_modelo(max_force_user)) / M
-    EDGE_EPS = max(1e-6, 0.5 * max_cart_acc * delta_t**2)
-    startup_force = [0.0]
-    startup_until = [0.0]
-    startup_force[0], startup_until[0] = crear_arranque(theta_0_deg, v_0_deg)
+    # Aceleración máxima del carro ≈ F_max/(M+m); epsilon = 2 pasos a esa aceleración
+    F_MAX = 100.0
+    EDGE_EPS = 2 * (F_MAX / (M + m)) * delta_t**2
 
     estado = crear_estado(theta_0_deg, v_0_deg)
     hist = reiniciar_historiales(theta_0_deg)
@@ -420,10 +359,10 @@ def simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5):
     fig = plt.figure(figsize=(14.8, 8.6))
     fig.patch.set_facecolor('#0f1117')
 
-    ax_anim = fig.add_axes([0.03, 0.21, 0.50, 0.74])
-    ax_th = fig.add_axes([0.58, 0.71, 0.38, 0.17])
-    ax_x = fig.add_axes([0.58, 0.47, 0.38, 0.13])
-    ax_f = fig.add_axes([0.58, 0.18, 0.38, 0.21])
+    ax_anim = fig.add_axes([0.03, 0.26, 0.50, 0.68])
+    ax_th = fig.add_axes([0.58, 0.69, 0.38, 0.19])
+    ax_x = fig.add_axes([0.58, 0.44, 0.38, 0.15])
+    ax_f = fig.add_axes([0.58, 0.15, 0.38, 0.21])
 
     for ax in (ax_anim, ax_th, ax_x, ax_f):
         ax.set_facecolor('#1a1d2e')
@@ -432,22 +371,23 @@ def simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5):
             sp.set_edgecolor('#2a2d3a')
 
     side_margin = L_vis + CART_HALF_WIDTH + 0.45
-    actualizar_camara_animacion(ax_anim, track_limit, side_margin)
+    _anim_xlim = track_limit + side_margin
+    ax_anim.set_xlim(-_anim_xlim, _anim_xlim)
     ax_anim.set_ylim(-2.0, 2.0)
     ax_anim.set_aspect('equal')
     ax_anim.axhline(0, color='#2a2d3a', lw=1)
     ax_anim.axvline(0, color='#2a2d3a', lw=0.5, ls='--')
     ax_anim.axhline(-L_vis, color='#2a2d3a', lw=0.5, ls=':')
     ax_anim.axvspan(-track_limit, track_limit, color='#171c2c', alpha=0.35, zorder=0)
-    # Topes dinámicos en rojo — se dibujan según track_limit
-    ax_anim.axvline(-track_limit, color='#e05252', lw=1.5, ls='--', alpha=0.8)
-    ax_anim.axvline(track_limit, color='#e05252', lw=1.5, ls='--', alpha=0.8)
+    linea_tope_izq = ax_anim.axvline(-track_limit, color='#e05252', lw=1.5, ls='--', alpha=0.8)
+    linea_tope_der = ax_anim.axvline( track_limit, color='#e05252', lw=1.5, ls='--', alpha=0.8)
     ax_anim.set_title('Péndulo invertido — FAM 7×7', color='#c8d0e8', fontsize=11)
-    # Eje X con ticks de posición
     ax_anim.set_yticks([])
+    tick_step = 1.0 if track_limit <= 4 else 2.0
+    _xticks = np.arange(-np.ceil(_anim_xlim), np.ceil(_anim_xlim) + 0.001, tick_step)
+    ax_anim.set_xticks(_xticks)
     ax_anim.tick_params(axis='x', colors='#8890a8', labelsize=7, length=3)
     ax_anim.set_xlabel('x [m]', color='#8890a8', fontsize=8, labelpad=1)
-    # Indicador de posición del carro en el eje X (punto deslizante)
     ind_x, = ax_anim.plot([0], [-1.95], 'v', color='#4a9eff', ms=7, zorder=6, clip_on=False)
     ax_anim.text(-track_limit, -1.82, f'{-track_limit:.1f}', color='#e05252', fontsize=7, ha='center')
     ax_anim.text(track_limit, -1.82, f'{track_limit:.1f}', color='#e05252', fontsize=7, ha='center')
@@ -486,21 +426,21 @@ def simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5):
     ax_f.set_ylabel('F [N]', color=COLOR_F_TOTAL, fontsize=9)
     ax_f.set_xlabel('t [s]', color='#8890a8', fontsize=9)
     ax_f.axhline(0, color='#3a4060', lw=0.8)
-    ax_f.set_ylim(-400, 400)
+    ax_f.set_ylim(-150, 150)
     ax_f.grid(True, alpha=0.12)
     linea_f_ctrl, = ax_f.plot([], [], color=COLOR_F_CTRL, lw=1.4, label='F_ctrl')
     linea_f_push, = ax_f.plot([], [], color=COLOR_F_PUSH, lw=1.5, label='F_empuje')
     linea_f_total, = ax_f.plot([], [], color=COLOR_F_TOTAL, lw=1.9, label='F_total')
     ax_f.legend(loc='upper right', frameon=False, fontsize=8, labelcolor='#c8d0e8')
 
-    ax_mu_t = fig.add_axes([0.05, 0.07, 0.14, 0.09])
+    ax_mu_t  = fig.add_axes([0.05, 0.07, 0.14, 0.09])
     ax_mu_dt = fig.add_axes([0.21, 0.07, 0.14, 0.09])
-    ax_mu_f = fig.add_axes([0.37, 0.07, 0.14, 0.09])
+    ax_mu_f  = fig.add_axes([0.37, 0.07, 0.14, 0.09])
 
     inset_configs = [
-        (ax_mu_t, THETA_PLOT_SPECS, 'θ', -180, 180),
-        (ax_mu_dt, DTHETA_PLOT_SPECS, "θ'", -90, 90),
-        (ax_mu_f, F_PLOT_SPECS, 'F', -300, 300),
+        (ax_mu_t,  THETA_PLOT_SPECS,  'θ',  -180, 180),
+        (ax_mu_dt, DTHETA_PLOT_SPECS, "θ'", -90,  90),
+        (ax_mu_f,  F_PLOT_SPECS,      'F',  -100, 100),
     ]
 
     for ax_i, specs, lbl, xmin, xmax in inset_configs:
@@ -519,34 +459,28 @@ def simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5):
         ax_i.text(0.02, 0.85, lbl, transform=ax_i.transAxes,
                   color='#8890a8', fontsize=6, va='top')
 
-    linea_cur_t, = ax_mu_t.plot([], [], color='white', lw=0.8, ls='--')
-    linea_cur_dt, = ax_mu_dt.plot([], [], color='white', lw=0.8, ls='--')
-    linea_cur_f, = ax_mu_f.plot([], [], color=COLOR_F_TOTAL, lw=1.2, ls='--')
-    puntos_t = [ax_mu_t.plot([], [], 'o', color=COLORES[i], ms=3, zorder=5)[0]
-                for i in range(7)]
-    puntos_dt = [ax_mu_dt.plot([], [], 'o', color=COLORES[i], ms=3, zorder=5)[0]
-                 for i in range(7)]
+    linea_cur_t,  = ax_mu_t.plot([], [],  color='white',        lw=0.8, ls='--')
+    linea_cur_dt, = ax_mu_dt.plot([], [], color='white',        lw=0.8, ls='--')
+    linea_cur_f,  = ax_mu_f.plot([], [],  color=COLOR_F_TOTAL,  lw=1.2, ls='--')
+    puntos_t  = [ax_mu_t.plot([], [],  'o', color=COLORES[i], ms=3, zorder=5)[0] for i in range(7)]
+    puntos_dt = [ax_mu_dt.plot([], [], 'o', color=COLORES[i], ms=3, zorder=5)[0] for i in range(7)]
 
-    ax_btn_l = fig.add_axes([0.58, 0.03, 0.12, 0.06])
-    ax_btn_r = fig.add_axes([0.72, 0.03, 0.12, 0.06])
+    ax_btn_l   = fig.add_axes([0.58, 0.03, 0.12, 0.06])
+    ax_btn_r   = fig.add_axes([0.72, 0.03, 0.12, 0.06])
     ax_btn_rst = fig.add_axes([0.87, 0.03, 0.10, 0.06])
 
-    btn_l = widgets.Button(ax_btn_l, '← Empujar', color='#1e2235', hovercolor='#2a3050')
-    btn_r = widgets.Button(ax_btn_r, 'Empujar →', color='#1e2235', hovercolor='#2a3050')
-    btn_rst = widgets.Button(ax_btn_rst, '↺ Reset', color='#1e2235', hovercolor='#2a3050')
+    btn_l   = widgets.Button(ax_btn_l,   '← Empujar', color='#1e2235', hovercolor='#2a3050')
+    btn_r   = widgets.Button(ax_btn_r,   'Empujar →', color='#1e2235', hovercolor='#2a3050')
+    btn_rst = widgets.Button(ax_btn_rst, '↺ Reset',   color='#1e2235', hovercolor='#2a3050')
 
-    for btn, sp_color, lbl_color in [
-        (btn_l, '#4a9eff', '#4a9eff'),
-        (btn_r, '#ff6b4a', '#ff6b4a'),
-        (btn_rst, '#8890a8', '#8890a8'),
-    ]:
+    for btn, sp_color in [(btn_l, '#4a9eff'), (btn_r, '#ff6b4a'), (btn_rst, '#8890a8')]:
         for sp in btn.ax.spines.values():
             sp.set_edgecolor(sp_color)
-        btn.label.set_color(lbl_color)
+        btn.label.set_color(sp_color)
         btn.label.set_fontsize(10)
 
-    EMPUJE_N = 100.0
-    EMPUJE_DT = 0.5
+    EMPUJE_N  = 150.0
+    EMPUJE_DT = 2
     empuje_fin = [0.0]
 
     def empujar_izq(event):
@@ -560,7 +494,6 @@ def simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5):
     def reset(event):
         estado.update(crear_estado(theta_0_deg, v_0_deg))
         empuje_fin[0] = 0.0
-        startup_force[0], startup_until[0] = crear_arranque(theta_0_deg, v_0_deg)
         nuevo_hist = reiniciar_historiales(theta_0_deg)
         for clave, valores in nuevo_hist.items():
             hist[clave].clear()
@@ -583,37 +516,34 @@ def simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5):
             if estado['t'] > empuje_fin[0]:
                 estado['empuje'] = 0.0
             th_norm = _normaliza_angulo_deg(np.degrees(estado['theta']))
-            vd_deg = np.degrees(estado['v'])
+            vd_deg  = np.degrees(estado['v'])
             estado['f_ctrl'] = limitar_fuerza_control(
-                estado['cart_x'], track_limit, EDGE_EPS, controlador_fam(th_norm, vd_deg)
+                estado['cart_x'], track_limit, EDGE_EPS,
+                controlador_fam(th_norm, vd_deg)
             )
-            f_start = startup_force[0] if estado['t'] <= startup_until[0] else 0.0
-            estado['f_total'] = estado['f_ctrl'] + estado['empuje'] + f_start
-            integrar_pendulo(estado, estado['f_total'], delta_t)
-            actualizar_posicion_carro(estado, track_limit, EDGE_EPS)
+            estado['f_total'] = estado['f_ctrl'] + estado['empuje']
+            integrar_sistema(estado, estado['f_total'], delta_t)
+            aplicar_topes_carro(estado, track_limit)
             registrar_historial(hist, estado)
 
-        cx = estado['cart_x']
-        th = estado['theta']
-        f_ctrl_act = estado['f_ctrl']
-        f_push_act = estado['empuje']
+        cx      = estado['cart_x']
+        th      = estado['theta']
+        f_ctrl_act  = estado['f_ctrl']
+        f_push_act  = estado['empuje']
         f_total_act = estado['f_total']
-        t_act = estado['t']
+        t_act       = estado['t']
         th_norm = _normaliza_angulo_deg(np.degrees(th))
-        vd_deg = np.degrees(estado['v'])
-        cart_v_act = estado['cart_v']
-        f_start_act = startup_force[0] if estado['t'] <= startup_until[0] else 0.0
+        vd_deg  = np.degrees(estado['v'])
 
-        actualizar_camara_animacion(ax_anim, track_limit, side_margin)
         carro.set_x(cx - CART_HALF_WIDTH)
-        ind_x.set_data([cx], [-1.95])  # indicador de posición en eje X
+        ind_x.set_data([cx], [-1.95])
         px = cx + L_vis * np.sin(th)
         py = L_vis * np.cos(th)
         pertiga.set_data([cx, px], [0, py])
         masa.set_data([px], [py])
 
         color_f = '#4a9eff' if f_total_act >= 0 else '#ff6b4a'
-        alen = np.clip(f_total_act / 300 * ARROW_SCALE, -1.0, 1.0)
+        alen = np.clip(f_total_act / 100 * ARROW_SCALE, -1.0, 1.0)
         x_tip = cx - alen
         flecha_ln.set_data([cx, x_tip], [-0.12, -0.12])
         flecha_ln.set_color(color_f)
@@ -622,8 +552,8 @@ def simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5):
         flecha_pt.set_marker('<' if f_total_act >= 0 else '>')
 
         texto.set_text(
-            f"t={t_act:.1f}s   x={cx:.2f} m   θ={th_norm:.1f}°\n"
-            f"x'={cart_v_act:.2f} m/s   θ'={vd_deg:.1f}°/s   F_ctrl={f_ctrl_act:+.2f} N   F_emp={f_push_act:+.2f} N   F_arr={f_start_act:+.2f} N   F_total={f_total_act:+.2f} N"
+            f"t={t_act:.1f}s   x={cx:.2f} m   vx={estado['cart_vx']:.2f} m/s   θ={th_norm:.1f}°\n"
+            f"θ'={vd_deg:.1f}°/s   F_ctrl={f_ctrl_act:+.2f} N   F_emp={f_push_act:+.2f} N   F_total={f_total_act:+.2f} N"
         )
 
         t0 = max(0.0, t_act - VENTANA)
@@ -664,4 +594,4 @@ def simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5):
 # =============================================================================
 if __name__ == '__main__':
     graficar_particiones()
-    simular(delta_t=0.005, theta_0_deg=180.0, v_0_deg=0.0, track_limit=5)
+    simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5)
