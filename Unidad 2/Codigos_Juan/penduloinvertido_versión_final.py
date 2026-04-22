@@ -602,8 +602,6 @@ def simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5):
         th_norm = _normaliza_angulo_deg(np.degrees(th))
         vd_deg = np.degrees(estado['v'])
         cart_v_act = estado['cart_v']
-        f_start_act = startup_force[0] if estado['t'] <= startup_until[0] else 0.0
-
         actualizar_camara_animacion(ax_anim, track_limit, side_margin)
         carro.set_x(cx - CART_HALF_WIDTH)
         ind_x.set_data([cx], [-1.95])  # indicador de posición en eje X
@@ -623,7 +621,7 @@ def simular(delta_t=0.01, theta_0_deg=180.0, v_0_deg=0.0, track_limit=2.5):
 
         texto.set_text(
             f"t={t_act:.1f}s   x={cx:.2f} m   θ={th_norm:.1f}°\n"
-            f"x'={cart_v_act:.2f} m/s   θ'={vd_deg:.1f}°/s   F_ctrl={f_ctrl_act:+.2f} N   F_emp={f_push_act:+.2f} N   F_arr={f_start_act:+.2f} N   F_total={f_total_act:+.2f} N"
+            f"x'={cart_v_act:.2f} m/s   θ'={vd_deg:.1f}°/s   F_ctrl={f_ctrl_act:+.2f} N   F_emp={f_push_act:+.2f} N   F_total={f_total_act:+.2f} N"
         )
 
         t0 = max(0.0, t_act - VENTANA)
